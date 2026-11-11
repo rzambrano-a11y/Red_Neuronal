@@ -90,7 +90,11 @@ def inject_css() -> None:
             font-size: 2.05rem;
             line-height: 1.15;
             letter-spacing: -0.03em;
-            margin: 0 0 0.35rem;
+            margin: 0 0 0.2rem;
+          }
+          .lede {
+            margin: 0;
+            color: #4e4944;
           }
           .eyebrow {
             margin: 0 0 0.25rem;
@@ -417,8 +421,9 @@ def render_header() -> None:
     st.markdown(
         """
         <header class="hero">
-          <p class="eyebrow">Taller · red neuronal de tres capas</p>
-          <h1>Conexiones simuladas</h1>
+          <p class="eyebrow">Asignatura · Inteligencia Artificial</p>
+          <h1>Clasificación de conexiones simuladas</h1>
+          <p class="lede">Ingeniería Informática · UNIPAZ · red neuronal 2-8-4-1</p>
         </header>
         """,
         unsafe_allow_html=True,
@@ -503,25 +508,25 @@ def render_analyze() -> None:
     controls, outcome = st.columns([1.05, 0.95], gap="large")
     with controls:
         attempts = st.slider(
-            "Intentos fallidos",
+            "Intentos fallidos de inicio de sesión",
             min_value=0,
             max_value=20,
             step=1,
             key="attempts",
-            help="Inicios de sesión fallidos. En el taller van de 0 a 20.",
+            help="x₁. Solo se aceptan enteros de 0 a 20, el mismo rango de los datos simulados.",
         )
         traffic = st.slider(
-            "Tráfico enviado",
+            "Tráfico enviado (MB)",
             min_value=0,
             max_value=2000,
             step=10,
             format="%d MB",
             key="traffic",
-            help="Megabytes enviados. En el taller van de 0 a 2.000, de 10 en 10.",
+            help="x₂. Solo se aceptan valores de 0 a 2.000 MB. Fuera de ese rango el modelo no se consulta.",
         )
         result = st.session_state.get("last_result")
         stale = result is not None and not _same_inputs(result, attempts, traffic)
-        label = "Actualizar clasificación" if stale else "Clasificar conexión"
+        label = "Actualizar el análisis" if stale else "Analizar la conexión"
         if st.button(label, type="primary", width="stretch"):
             classify(int(attempts), int(traffic))
             result = st.session_state.get("last_result")
@@ -610,81 +615,122 @@ def render_guide() -> None:
     st.subheader("Cómo funciona el experimento")
     st.markdown(
         """
-        Aquí se hace una sola tarea: decir si una conexión **simulada** se parece
-        más a las que el taller etiquetó como normales o como sospechosas.
+        La red aprende a separar conexiones **simuladas** en dos etiquetas:
+        **0, normal** y **1, sospechosa**. Esta pantalla no inventa el resultado:
+        llama al modelo ya entrenado.
 
         1. Si todavía no hay modelo, entrénelo en **Analizar conexión**. Para repetirlo, use **Resultados**.
-        2. Clasifique una conexión con intentos fallidos y tráfico.
-        3. Compare las métricas con la referencia, que siempre elige la clase más frecuente.
+        2. Introduzca intentos fallidos y tráfico, y pulse **Analizar la conexión**.
+        3. Lea la probabilidad, el umbral de 0,5 y la clasificación. Luego compare las métricas de la prueba.
         """
     )
-    st.markdown("#### Las dos entradas")
+    st.markdown("#### Entradas y etiquetas")
     st.markdown(
         """
-        Cada conexión tiene solo dos números, en este orden:
+        Cada conexión aporta solo dos valores:
 
-        - **Intentos fallidos**, de 0 a 20.
-        - **Tráfico enviado**, de 0 a 2.000 MB.
+        - **x₁, intentos fallidos** de inicio de sesión, de 0 a 20.
+        - **x₂, tráfico enviado**, de 0 a 2.000 MB.
 
-        La red no ve direcciones, puertos ni usuarios. Si un valor cae fuera de
-        esos rangos, la interfaz lo rechaza: son los mismos límites del conjunto simulado.
+        La etiqueta es la respuesta con la que la red aprende: 0 si la conexión es normal
+        y 1 si es sospechosa. La semilla 42 no clasifica nada: solo permite repetir
+        la generación de datos y el entrenamiento.
         """
     )
-    st.markdown("#### De dónde salen las respuestas")
+    st.markdown("#### De dónde salen las etiquetas")
     st.markdown(
         """
-        Las 2.000 conexiones se generan con la semilla 42. La etiqueta no viene de
-        un ataque real. Sale de esta regla del taller, más un poco de ruido aleatorio
-        para que el problema no tenga una frontera perfecta:
+        Las 2.000 conexiones son simuladas. La etiqueta no sale de un ataque real.
+        Se calcula con la regla del taller y un poco de ruido, para que la frontera
+        no sea perfecta:
         """
     )
     st.code(
         "puntaje  = 0,55 × (intentos / 20) + 0,45 × (tráfico MB / 2000) + ruido\n"
-        "etiqueta = sospechosa si puntaje ≥ 0,55; si no, normal",
+        "etiqueta = 1 (sospechosa) si puntaje ≥ 0,55; si no, 0 (normal)",
         language=None,
+    )
+    st.markdown("#### Qué ocurre dentro de una neurona")
+    st.markdown(
+        """
+        Cada neurona multiplica las entradas por unos pesos, suma un sesgo y aplica
+        una activación. En la primera capa, con las dos entradas del taller:
+        """
+    )
+    st.code(
+        "z = (w₁ × x₁) + (w₂ × x₂) + b\n"
+        "ReLU(z) = 0 si z < 0;  z si z ≥ 0\n"
+        "p = 1 / (1 + e^(−z))    # solo en la neurona de salida",
+        language=None,
+    )
+    st.markdown(
+        """
+        Los **pesos** dicen cuánto pesa cada entrada. Los **sesgos** desplazan la
+        respuesta de la neurona, también cuando las entradas son pequeñas.
+        La red no trae esos valores escritos a mano: los ajusta al entrenar.
+
+        **ReLU**, en las dos capas ocultas, deja pasar el valor positivo y convierte
+        el negativo en cero. Así la red aprende relaciones que una sola recta no
+        puede separar. La **sigmoide**, en la salida, convierte la cuenta en una
+        probabilidad entre 0 y 1. Si esa probabilidad llega a **0,5**, la clase es
+        sospechosa; si queda por debajo, es normal.
+        """
     )
     st.markdown("#### La red")
     st.markdown(_architecture_html(), unsafe_allow_html=True)
     st.markdown(
         """
-        Son 65 parámetros entrenables. El optimizador es Adam y la pérdida es la
-        entropía cruzada binaria. La salida sigmoide es una probabilidad: si llega
-        al **50 %**, la clase es sospechosa; por debajo, normal.
+        La arquitectura es 2-8-4-1 y tiene **65 parámetros entrenables**, entre pesos
+        y sesgos. Antes de entrar a la red, los datos se normalizan. Si no se hiciera,
+        el tráfico, que llega hasta 2.000, dominaría a los intentos, que solo llegan
+        a 20. El normalizador se ajusta solo con el entrenamiento.
 
-        La parada temprana vigila la pérdida de validación. Si no mejora durante
-        12 épocas, el ajuste se detiene y **se restauran los pesos de la mejor época**,
-        no los de la última.
+        El optimizador es Adam y la pérdida es la entropía cruzada binaria. Se espera
+        que esa pérdida baje a lo largo de las épocas.
         """
     )
-    st.markdown("#### Cómo se reparte el conjunto")
+    st.markdown("#### Dónde ocurre el aprendizaje")
     st.markdown(
         """
-        La división es estratificada, así que cada parte conserva la proporción de clases:
+        El aprendizaje ocurre en `modelo.fit()`. En cada época la red revisa los
+        datos de entrenamiento: hace la propagación hacia adelante, compara su
+        predicción con la etiqueta, calcula la pérdida y propaga el error hacia atrás
+        para actualizar pesos y sesgos.
 
-        - **64 %** ajusta los pesos.
-        - **16 %** valida cada época y decide la parada.
-        - **20 %** queda intacto para las métricas finales.
+        De las 2.000 conexiones:
 
-        El normalizador se ajusta solo con el entrenamiento. La prueba no influye
-        en los pesos ni en la elección de la mejor época.
+        - **64 %** ajusta esos pesos.
+        - **16 %** vigila cada época. Si la validación no mejora durante 12 épocas, el ajuste se detiene y **se restauran los pesos de la mejor época**.
+        - **20 %** queda aparte. Esas filas no se usaron para aprender y son las que producen la pérdida, la exactitud, la precisión y el recall.
         """
     )
-    with st.expander("Cómo leer las métricas"):
+    with st.expander("Cómo leer las métricas del taller"):
         st.markdown(
             """
-            - **Exactitud:** aciertos sobre el total de la prueba.
-            - **Precisión:** de las alertas de sospecha, cuántas lo eran.
-            - **Recall:** de las sospechosas reales, cuántas detectó.
+            - **Pérdida:** error del modelo. Durante el entrenamiento se espera que disminuya.
+            - **Exactitud:** porcentaje general de aciertos en la prueba.
+            - **Precisión:** de las conexiones marcadas como sospechosas, cuántas lo eran.
+            - **Recall:** de las sospechosas reales, cuántas detectó el modelo.
             - **F1:** equilibrio entre precisión y recall.
-            - **Especificidad:** de las normales reales, cuántas reconoció.
-            - **ROC-AUC:** qué tan bien ordena sospechosas por encima de normales. 0,50 se parece al azar.
-            - **Brier:** error de las probabilidades. Más bajo es mejor.
             - **Matriz de confusión:** filas = clase real, columnas = clase predicha.
 
-            La referencia predice siempre la clase mayoritaria del entrenamiento.
-            Sirve para ver si la red aprendió algo más que repetir esa clase.
+            La referencia predice siempre la clase más frecuente. Sirve para ver si la
+            red aprendió algo más que repetir esa clase. Una exactitud alta indica que
+            el modelo reconoció el patrón de los datos simulados. No indica que pueda
+            detectar ataques reales.
             """
         )
+    st.markdown("#### Cómo se conecta esta pantalla con el modelo")
+    st.markdown(
+        """
+        La interfaz no recalcula la probabilidad por su cuenta. Después de entrenar
+        o de abrir el archivo guardado, cada análisis llama a
+        `ConnectionRiskService.predict` con los dos valores introducidos. El servicio
+        valida el rango, normaliza con el mismo escalador del entrenamiento y
+        devuelve la probabilidad, el umbral, la clase y la explicación que se ven
+        en la tarjeta.
+        """
+    )
 
 
 def _render_dataset(report: dict) -> None:
@@ -806,6 +852,10 @@ def _render_architecture() -> None:
     service = ready_service()
     st.subheader("Arquitectura")
     st.markdown(_architecture_html(), unsafe_allow_html=True)
+    st.caption(
+        "2 entradas, 8 neuronas ReLU, 4 neuronas ReLU y 1 salida sigmoide. "
+        "En total, 65 parámetros entrenables entre pesos y sesgos."
+    )
     if service is None:
         return
     with st.expander("Resumen técnico de Keras"):
@@ -835,8 +885,8 @@ def _show_result(result, stale: bool) -> None:
             <article class="result-card idle">
               <p class="eyebrow">Resultado</p>
               <h3>Sin clasificar</h3>
-              <p>Ajuste los dos controles y pulse <strong>Clasificar conexión</strong>.
-              Si abre un ejemplo, verá el resultado y los valores que lo produjeron.</p>
+              <p>Introduzca los intentos fallidos y el tráfico, y pulse <strong>Analizar la conexión</strong>.
+              El modelo devolverá la probabilidad, el umbral, la clasificación y una explicación.</p>
             </article>
             """,
             unsafe_allow_html=True,
@@ -859,19 +909,21 @@ def _result_html(result, stale: bool = False, compact: bool = False) -> str:
     probability = max(0.0, min(float(result.probability), 1.0))
     threshold = max(0.0, min(float(result.threshold), 1.0))
     notice = "" if compact else f'<p class="card-note">{html.escape(result.academic_notice)}</p>'
+    values = f"{result.failed_attempts} intentos fallidos · {result.traffic_mb:.0f} MB"
     return f"""
     <article class="{classes}">
       {stale_line}
       <p class="eyebrow">Clasificación</p>
       <h3>{title}</h3>
+      <p class="eyebrow">Probabilidad</p>
       <p class="prob">{probability:.1%}</p>
       <div class="meter" role="img" aria-label="Probabilidad {probability:.1%}">
         <span class="meter-fill" style="width:{probability * 100:.1f}%"></span>
         <span class="meter-mark" style="left:{threshold * 100:.1f}%"></span>
       </div>
-      <p class="card-note">La línea marca el umbral de decisión ({threshold:.0%}).</p>
-      <p class="explain">{html.escape(result.explanation)}</p>
-      <p class="meta">{result.failed_attempts} intentos · {result.traffic_mb:.0f} MB</p>
+      <p class="card-note">Umbral utilizado: {threshold:.0%}. La línea vertical lo marca en la barra.</p>
+      <p class="meta">Valores introducidos: {values}</p>
+      <p class="explain">Explicación: {html.escape(result.explanation)}</p>
       {notice}
     </article>
     """
@@ -985,7 +1037,7 @@ def main() -> None:
         raise SystemExit(0)
 
     st.set_page_config(
-        page_title="Conexiones simuladas",
+        page_title="Clasificación de conexiones simuladas",
         page_icon="◎",
         layout="wide",
         initial_sidebar_state="auto",

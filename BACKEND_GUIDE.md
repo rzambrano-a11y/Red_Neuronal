@@ -75,7 +75,7 @@ ejemplo en JSON.
 ## Contrato para la interfaz
 
 La interfaz incluida está en `interfaz.py` y se abre con
-`python -m streamlit run interfaz.py`. Carga una sola instancia al iniciar:
+`python servidor_interfaz.py`. Carga una sola instancia al iniciar:
 
 ```python
 from backend import ConnectionRiskService, InputValidationError

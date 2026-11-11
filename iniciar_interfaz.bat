@@ -1,6 +1,6 @@
 @echo off
 cd /d "%~dp0"
-python -m streamlit run interfaz.py
+python servidor_interfaz.py
 if errorlevel 1 (
   echo.
   echo No se pudo abrir la interfaz.

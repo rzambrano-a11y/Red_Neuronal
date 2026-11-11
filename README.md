@@ -43,7 +43,7 @@ La interfaz carga el modelo una sola vez. Desde ahí se clasifica una conexión,
 se leen las métricas contra la referencia y se consulta cómo está armado el experimento.
 
 ```powershell
-python -m streamlit run interfaz.py
+python servidor_interfaz.py
 ```
 
 En Windows también puede abrirse con `iniciar_interfaz.bat`.
@@ -109,12 +109,14 @@ documentados en [BACKEND_GUIDE.md](BACKEND_GUIDE.md).
 ```text
 01_estudiantes_consola/
 ├── red_neuronal_estudiantes.py   # Punto de entrada de consola
-├── interfaz.py                   # Interfaz gráfica (Streamlit)
+├── servidor_interfaz.py          # Servidor de la interfaz animada
+├── web/                          # Página, estilos y animación de la red
+├── interfaz.py                   # Interfaz alternativa con Streamlit
 ├── iniciar_interfaz.bat          # Atajo de Windows para la interfaz
 ├── requirements.txt              # Dependencias
 ├── BACKEND_GUIDE.md              # Guía técnica del backend
 ├── LEAME_ESTUDIANTES.txt         # Instrucciones breves para estudiantes
-├── .streamlit/config.toml        # Tema de la interfaz
+├── .streamlit/config.toml        # Tema de la interfaz alternativa
 ├── doct/                         # Enunciado del taller (PDF)
 └── backend/
     ├── __init__.py               # API pública del paquete

@@ -27,7 +27,7 @@ guarda configuración, métricas, historial y predicciones de ejemplo.
 
 Interfaz gráfica
 
-   python -m streamlit run interfaz.py
+   python servidor_interfaz.py
 
 En Windows puede usar iniciar_interfaz.bat. Si no existe
 artifacts/red_estudiantes.zip, pulse Entrenar red dentro de la interfaz.
