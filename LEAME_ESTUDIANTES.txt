@@ -1,0 +1,36 @@
+TALLER DE RED NEURONAL DE TRES CAPAS
+
+Objetivo
+Entrenar y evaluar una red neuronal que clasifica conexiones informáticas
+simuladas como normales o sospechosas. Los datos son de finalidad académica.
+
+Instalación
+1. Abra esta carpeta en Visual Studio Code.
+2. Abra la terminal.
+3. Instale las librerías:
+
+   python -m pip install -r requirements.txt
+
+Ejecución de consola
+
+   python red_neuronal_estudiantes.py
+
+El comando entrena el modelo, muestra su arquitectura y las métricas de prueba,
+y analiza tres conexiones de ejemplo. Para guardar el modelo junto con su
+normalizador y usarlo desde una interfaz:
+
+   python red_neuronal_estudiantes.py --artifact artifacts/red_estudiantes.zip --report-json informes/entrenamiento.json
+
+El entrenamiento usa parada temprana y también compara sus resultados con una
+referencia sencilla que siempre predice la clase más frecuente. El informe JSON
+guarda configuración, métricas, historial y predicciones de ejemplo.
+
+Backend para la interfaz
+La lógica se encuentra en el paquete backend. La guía BACKEND_GUIDE.md documenta
+su API, el formato del resultado, la validación de entradas y cómo cargar el
+modelo sin volver a entrenarlo en cada solicitud.
+
+Importante
+Las probabilidades y clasificaciones se producen con datos simulados y una
+regla de etiquetado didáctica. El programa no es un sistema real de detección de
+ataques informáticos.
