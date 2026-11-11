@@ -74,7 +74,8 @@ ejemplo en JSON.
 
 ## Contrato para la interfaz
 
-La interfaz carga una sola instancia al iniciar:
+La interfaz incluida está en `interfaz.py` y se abre con
+`python -m streamlit run interfaz.py`. Carga una sola instancia al iniciar:
 
 ```python
 from backend import ConnectionRiskService, InputValidationError
@@ -109,6 +110,8 @@ guardarlo con `servicio.save("artifacts/red_estudiantes.zip")`.
 - `ConnectionRiskService.predict_many([(intentos, trafico), ...])` analiza varias.
 - `ConnectionRiskService.model_info()` retorna arquitectura, entradas, umbral,
   estado del servicio y las métricas guardadas en el artefacto.
+- `ConnectionRiskService.last_training_report()` devuelve una copia del informe
+  del último entrenamiento o del artefacto cargado.
 - `TrainingResult`, `EvaluationMetrics` y `PredictionResult` tienen `to_dict()`
   para facilitar su conversión a JSON.
 

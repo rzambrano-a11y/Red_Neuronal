@@ -25,6 +25,16 @@ El entrenamiento usa parada temprana y también compara sus resultados con una
 referencia sencilla que siempre predice la clase más frecuente. El informe JSON
 guarda configuración, métricas, historial y predicciones de ejemplo.
 
+Interfaz gráfica
+
+   python -m streamlit run interfaz.py
+
+En Windows puede usar iniciar_interfaz.bat. Si no existe
+artifacts/red_estudiantes.zip, pulse Entrenar red dentro de la interfaz.
+Ese botón deja el modelo listo para clasificar sin repetir el entrenamiento
+en cada consulta. La pantalla muestra la probabilidad, el umbral, las métricas
+de la prueba y el aviso de que los datos son simulados.
+
 Backend para la interfaz
 La lógica se encuentra en el paquete backend. La guía BACKEND_GUIDE.md documenta
 su API, el formato del resultado, la validación de entradas y cómo cargar el

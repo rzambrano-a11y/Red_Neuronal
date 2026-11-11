@@ -278,6 +278,17 @@ class ConnectionRiskService:
             ),
         }
 
+    def last_training_report(self) -> dict[str, Any] | None:
+        """Copia del informe del último entrenamiento o del artefacto cargado.
+
+        La interfaz puede mostrar métricas, curvas y la comparación de referencia
+        sin leer atributos internos ni volver a evaluar.
+        """
+
+        if self._last_training_report is None:
+            return None
+        return deepcopy(self._last_training_report)
+
     def save(self, path: str | Path) -> Path:
         """Guarda red, normalizador y resumen en un único archivo ZIP.
 
