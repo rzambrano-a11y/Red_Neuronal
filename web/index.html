@@ -50,54 +50,28 @@
         </article>
         <div class="build-stage">
           <canvas id="build-net" aria-label="La red neuronal se arma al bajar por la página"></canvas>
+          <p class="sign-key">
+            <span><i></i> Positiva</span>
+            <span><i class="neg"></i> Negativa</span>
+          </p>
         </div>
       </div>
     </section>
 
-    <section class="journey" id="recorrido">
-      <h2>Del dato a la predicción</h2>
-      <div class="flow">
-        <a class="step" href="/simulador">
-          <span class="step-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24"><ellipse cx="12" cy="7" rx="7" ry="3"/><path d="M5 7v5c0 1.7 3.1 3 7 3s7-1.3 7-3V7"/><path d="M5 12v5c0 1.7 3.1 3 7 3s7-1.3 7-3v-5"/></svg>
-          </span>
-          <span class="step-no">01</span>
-          <strong>Entrena</strong>
-          <span>La red aprende con 2.000 conexiones simuladas.</span>
-        </a>
-        <span class="chevron" aria-hidden="true">›</span>
-        <a class="step" href="/simulador">
-          <span class="step-icon violet" aria-hidden="true">
-            <svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="11" rx="1.5"/><path d="M8 20h8M12 16v4"/></svg>
-          </span>
-          <span class="step-no">02</span>
-          <strong>Analiza</strong>
-          <span>Introduce los datos de una conexión.</span>
-        </a>
-        <span class="chevron" aria-hidden="true">›</span>
-        <a class="step" href="/simulador#resultados">
-          <span class="step-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24"><path d="M5 19V10M12 19V5M19 19v-7"/></svg>
-          </span>
-          <span class="step-no">03</span>
-          <strong>Explora</strong>
-          <span>Consulta la clasificación y las métricas del modelo.</span>
-        </a>
-      </div>
-      <p class="arch">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="7" r="1.6"/><circle cx="12" cy="17" r="1.6"/><circle cx="19" cy="12" r="1.8"/><path d="M6.5 12H10M12 8.6l5.2 2.6M12 15.4l5.2-2.6"/></svg>
-        Arquitectura 2-8-4-1 · 20 % reservado para prueba
-      </p>
-    </section>
-
-    <section class="cta">
-      <svg class="waves" viewBox="0 0 1200 220" preserveAspectRatio="none" aria-hidden="true">
-        <path d="M-40 150 C 160 90, 320 190, 520 140 S 860 70, 1240 150"/>
-        <path d="M-40 175 C 200 120, 380 210, 620 165 S 980 110, 1240 180"/>
-      </svg>
-      <h2>Ahora explóralo tú</h2>
-      <p>Entrena el modelo y observa el flujo de señales.</p>
-      <a class="go" href="/simulador">Ir al simulador <span aria-hidden="true">→</span></a>
+    <section class="close" id="recorrido">
+      <h2>Prueba la simulación</h2>
+      <p>Escribe los datos de tu conexión y mira cómo la clasifica el modelo.</p>
+      <form class="own" action="/simulador" method="get">
+        <label>
+          Intentos fallidos
+          <input name="intentos" type="number" min="0" max="20" step="1" value="8" required>
+        </label>
+        <label>
+          Tráfico (MB)
+          <input name="trafico" type="number" min="0" max="2000" step="1" value="600" required>
+        </label>
+        <button class="try" type="submit">Probar simulación</button>
+      </form>
       <p class="notice" id="notice">Demostración académica con datos simulados. Este resultado no confirma ni descarta un ataque informático real.</p>
     </section>
   </main>

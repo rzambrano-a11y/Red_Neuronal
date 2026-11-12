@@ -46,6 +46,7 @@ _STATE: dict = {
         "ni descarta un ataque informático real."
     ),
     "threshold": 0.5,
+    "weights": None,
 }
 _SERVICE = None
 
@@ -89,6 +90,7 @@ def _public_state() -> dict:
             "revision": _STATE["revision"],
             "academic_notice": _STATE["academic_notice"],
             "threshold": _STATE["threshold"],
+            "weights": _STATE["weights"],
         }
 
 
@@ -116,6 +118,7 @@ def boot() -> None:
         _STATE["error"] = error
         _STATE["threshold"] = service.model_info()["threshold"] if service else 0.5
         _STATE["report"] = service.last_training_report() if service else None
+        _STATE["weights"] = service.connection_weights() if service and service.is_ready else None
         if service:
             _STATE["revision"] += 1
 
@@ -164,6 +167,7 @@ def _train(epochs: int, save: bool) -> None:
             _STATE["source"] = "sesión"
             _STATE["report"] = report.to_dict()
             _STATE["threshold"] = report.metrics.threshold
+            _STATE["weights"] = service.connection_weights()
             _STATE["message"] = message
             _STATE["error"] = None
             _STATE["revision"] += 1

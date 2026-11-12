@@ -65,12 +65,28 @@
           <div class="canvas-wrap">
             <canvas id="net" aria-label="Red neuronal 2, 8, 4, 1 con flujo de señales"></canvas>
             <div class="tooltip" id="tooltip" hidden></div>
+            <div class="film-corners" id="film-corners" hidden></div>
           </div>
-          <div class="layers" aria-hidden="true">
+          <div class="layers">
             <span>Entrada · 2</span>
             <span>Oculta · 8</span>
             <span>Oculta · 4</span>
             <span>Salida · 1</span>
+            <p class="sign-key">
+              <span><i></i> Positiva</span>
+              <span><i class="neg"></i> Negativa</span>
+            </p>
+          </div>
+          <div class="pass" id="pass" hidden>
+            <div class="pass-meta">
+              <span id="pass-kicker">01 · Entrada</span>
+              <span class="pass-live">En vivo</span>
+            </div>
+            <strong id="pass-title" aria-live="polite"></strong>
+            <p id="pass-text"></p>
+            <ol class="pass-beats" id="pass-beats">
+              <li></li><li></li><li></li><li></li><li></li><li></li>
+            </ol>
           </div>
           <div class="transport">
             <button type="button" id="toggle-flow" aria-pressed="true" title="Pausar el flujo">
@@ -124,13 +140,17 @@
             <p class="muted">Los valores viajan por la red y el modelo responde.</p>
             <label class="field">
               Intentos fallidos de inicio de sesión
-              <input id="attempts" type="range" min="0" max="20" step="1" value="8">
-              <output id="attempts-out">8</output>
+              <span class="value-line">
+                <input id="attempts" type="range" min="0" max="20" step="1" value="8">
+                <input id="attempts-num" type="number" min="0" max="20" step="1" value="8" aria-label="Intentos fallidos, número">
+              </span>
             </label>
             <label class="field">
               Tráfico enviado (MB)
-              <input id="traffic" type="range" min="0" max="2000" step="10" value="600">
-              <output id="traffic-out">600 MB</output>
+              <span class="value-line">
+                <input id="traffic" type="range" min="0" max="2000" step="1" value="600">
+                <input id="traffic-num" type="number" min="0" max="2000" step="1" value="600" aria-label="Tráfico en megabytes, número">
+              </span>
             </label>
             <button class="go" type="submit">Analizar la conexión</button>
             <div class="examples">
@@ -157,21 +177,28 @@
         <div id="results-root" class="results"></div>
       </section>
 
-      <section class="view prose" id="view-guia" hidden>
-        <h2>Cómo funciona el experimento</h2>
-        <p>La red aprende a separar conexiones simuladas en dos etiquetas: 0, normal, y 1, sospechosa. Esta pantalla no inventa el número: lo calcula el modelo entrenado.</p>
-        <h3>Entradas y etiquetas</h3>
-        <p><strong>x₁</strong> son los intentos fallidos de inicio de sesión, de 0 a 20. <strong>x₂</strong> es el tráfico enviado, de 0 a 2.000 MB. La semilla 42 solo permite repetir el experimento; no clasifica conexiones.</p>
-        <pre>puntaje = 0,55 × (intentos / 20) + 0,45 × (tráfico / 2000) + ruido
-etiqueta = 1 si puntaje ≥ 0,55; si no, 0</pre>
-        <h3>Dentro de una neurona</h3>
-        <pre>z = (w₁ × x₁) + (w₂ × x₂) + b
-ReLU(z) = 0 si z &lt; 0;  z si z ≥ 0
-p = 1 / (1 + e^(−z))</pre>
-        <p>Los pesos dicen cuánto importa cada entrada. Los sesgos desplazan la respuesta. ReLU, en las capas ocultas, permite relaciones que una recta no separa. La sigmoide de la salida convierte la cuenta en una probabilidad entre 0 y 1. Si llega a 0,5, la clase es sospechosa.</p>
-        <h3>Dónde aprende</h3>
-        <p>El aprendizaje ocurre en <code>modelo.fit()</code>: propagación hacia adelante, comparación con la etiqueta, pérdida y ajuste de pesos y sesgos. El 64 % ajusta, el 16 % vigila la parada y el 20 % queda intacto para la pérdida, la exactitud, la precisión y el recall. Hay 65 parámetros entrenables.</p>
-        <p>La interfaz llama a <code>ConnectionRiskService.predict</code>. El servicio valida el rango, normaliza con el escalador del entrenamiento y devuelve la probabilidad, el umbral, la clase y la explicación.</p>
+      <section class="view tutorial" id="view-guia" hidden>
+        <div class="tutorial-head">
+          <div>
+            <p class="kicker">Tutorial guiado</p>
+            <h2>Cómo funciona el experimento</h2>
+            <p class="muted">Ocho pasos, leídos en voz alta. La explicación sigue la regla del taller y el modelo entrenado.</p>
+          </div>
+          <button class="tutorial-play" id="tutorial-play" type="button">Empezar con voz</button>
+        </div>
+        <div class="tutorial-layout">
+          <ol id="tutorial-index" class="tutorial-index"></ol>
+          <article class="tutorial-card">
+            <p class="kicker" id="tutorial-step">Paso 1 de 8</p>
+            <h3 id="tutorial-title"></h3>
+            <div id="tutorial-body"></div>
+            <div class="tutorial-nav">
+              <button type="button" id="tutorial-prev">Anterior</button>
+              <button type="button" id="tutorial-next">Siguiente</button>
+            </div>
+            <p class="muted fine" id="tutorial-voice"></p>
+          </article>
+        </div>
       </section>
     </main>
 

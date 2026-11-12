@@ -111,10 +111,11 @@ class PredictionResult:
     classification: str  # Nombre legible de la clase asignada.
     explanation: str  # Probabilidad y comparación con el umbral.
     academic_notice: str = ACADEMIC_NOTICE  # Alcance didáctico de la predicción.
+    trace: dict[str, Any] | None = None  # Activaciones reales de esta inferencia.
 
     def to_dict(self) -> dict[str, Any]:
         """Produce el diccionario que la UI puede mostrar o enviar como JSON."""
-        return {
+        payload = {
             "failed_attempts": self.failed_attempts,
             "traffic_mb": self.traffic_mb,
             "probability": self.probability,
@@ -124,3 +125,6 @@ class PredictionResult:
             "explanation": self.explanation,
             "academic_notice": self.academic_notice,
         }
+        if self.trace is not None:
+            payload["trace"] = self.trace
+        return payload

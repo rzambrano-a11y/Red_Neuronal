@@ -144,6 +144,9 @@ fetch("/api/state")
   .then((response) => response.json())
   .then((state) => {
     if (state.academic_notice) document.querySelector("#notice").textContent = state.academic_notice;
+    if (!state.weights) return;
+    weightMatrices = state.weights;
+    stampWeights(build.edges);
   })
   .catch(() => {});
 
@@ -188,10 +191,11 @@ function resizeBuild() {
     build.nodes[layer].forEach((from) => {
       build.nodes[layer + 1].forEach((to) => {
         const mid = (from.x + to.x) / 2;
-        build.edges.push({ from, to, layer, c1: { x: mid, y: from.y }, c2: { x: mid, y: to.y } });
+        build.edges.push({ from, to, layer, weight: null, c1: { x: mid, y: from.y }, c2: { x: mid, y: to.y } });
       });
     });
   }
+  stampWeights(build.edges);
   if (!build.particles.length) {
     build.particles = Array.from({ length: 28 }, () => ({
       edge: Math.floor(Math.random() * build.edges.length),
@@ -285,6 +289,22 @@ function drawField(now) {
   }
 }
 
+let weightMatrices = null;
+
+function stampWeights(edges) {
+  if (!weightMatrices) return;
+  edges.forEach((edge) => {
+    const matrix = weightMatrices[edge.from.layer];
+    if (matrix && matrix[edge.from.index]) edge.weight = matrix[edge.from.index][edge.to.index];
+  });
+}
+
+function signedColor(weight, alpha) {
+  if (typeof weight !== "number") return `rgba(158, 186, 214, ${alpha * 0.4})`;
+  const [red, green, blue] = weight >= 0 ? [61, 139, 255] : [255, 138, 48];
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+}
+
 function drawBuild(now) {
   if (!build.width) return;
   const progress = build.progress;
@@ -305,8 +325,9 @@ function drawBuild(now) {
   build.edges.forEach((edge, index) => {
     const amount = amounts[index];
     const moving = liveEdge(edge, now);
-    buildCtx.strokeStyle = edge.layer === 1 ? "rgba(190, 170, 255, 0.7)" : "rgba(130, 230, 255, 0.62)";
-    buildCtx.lineWidth = 1.35;
+    const strength = Math.min(1, Math.abs(edge.weight || 0));
+    buildCtx.strokeStyle = signedColor(edge.weight, 0.34 + strength * 0.5);
+    buildCtx.lineWidth = 1.15 + strength * 1.5;
     drawPartial(moving, amount);
   });
   build.particles.forEach((particle) => {
@@ -315,7 +336,7 @@ function drawBuild(now) {
     if (!edge || amount < 0.15) return;
     const point = pointOn(liveEdge(edge, now), Math.min(particle.t % 1, amount));
     buildCtx.beginPath();
-    buildCtx.fillStyle = "#f4feff";
+    buildCtx.fillStyle = edge.weight < 0 ? "#ffb27a" : "#8eb8ff";
     buildCtx.arc(point.x, point.y, 2.1, 0, Math.PI * 2);
     buildCtx.fill();
   });

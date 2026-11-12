@@ -89,93 +89,37 @@ h1 {
   animation: bob 1.3s ease-in-out infinite;
 }
 
-.journey { padding: 18px 0 6px; text-align: center; }
-.journey h2, .cta h2 { margin: 0 0 22px; font-size: clamp(1.7rem, 3vw, 2.15rem); letter-spacing: -0.03em; }
-.flow {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr auto 1fr;
-  gap: 12px;
-  align-items: stretch;
-  text-align: left;
+.close { padding: 84px 0 12px; text-align: center; }
+.close h2 { margin: 0; font-size: clamp(2rem, 4vw, 3.1rem); letter-spacing: -0.045em; }
+.close > p { margin: 12px auto 0; max-width: 36ch; color: var(--muted); font-size: 1.05rem; }
+.own {
+  display: flex; justify-content: center; align-items: flex-end; gap: 22px;
+  flex-wrap: wrap; margin-top: 28px;
 }
-.step {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  grid-template-rows: auto auto auto;
-  column-gap: 12px;
-  padding: 18px 18px 20px;
-  border-radius: 18px;
-  background: var(--card);
-  border: 1px solid var(--line);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
-  transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
-  animation: rise 0.7s ease both;
+.own label { display: grid; gap: 6px; text-align: left; color: var(--muted); font-size: 0.8rem; letter-spacing: 0.04em; }
+.own input {
+  width: 148px; background: transparent; border: 0; border-bottom: 2px solid rgba(46, 231, 255, 0.55);
+  padding: 6px 2px 8px; font-size: 1.55rem; font-weight: 750; color: var(--text);
 }
-.step:nth-of-type(2) { animation-delay: 0.12s; }
-.step:nth-of-type(3) { animation-delay: 0.22s; }
-.step:hover {
-  transform: translateY(-6px);
-  border-color: rgba(46, 231, 255, 0.45);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28), 0 0 24px rgba(46, 231, 255, 0.08);
-}
-.step-icon {
-  grid-row: 1 / span 3;
-  width: 54px; height: 54px; display: grid; place-items: center; border-radius: 14px;
-  background: rgba(46, 231, 255, 0.08);
-  box-shadow: inset 0 0 0 1px rgba(46, 231, 255, 0.2);
-}
-.step-icon.violet { background: rgba(155, 134, 255, 0.1); box-shadow: inset 0 0 0 1px rgba(155, 134, 255, 0.28); }
-.step-icon svg { width: 26px; height: 26px; fill: none; stroke: var(--cyan); stroke-width: 1.7; stroke-linecap: round; }
-.step-icon.violet svg { stroke: var(--violet); }
-.step-no { color: var(--cyan); font-weight: 750; letter-spacing: 0.04em; }
-.step strong { display: block; font-size: 1.2rem; margin-top: 2px; }
-.step > span:last-child { color: var(--muted); margin-top: 6px; line-height: 1.35; }
-.chevron { align-self: center; color: #5f7594; font-size: 1.6rem; }
-
-.arch {
-  display: inline-flex; align-items: center; gap: 8px;
-  margin: 22px 0 0; padding: 10px 18px; border-radius: 999px;
-  color: #d7c8ff; border: 1px solid rgba(155, 134, 255, 0.55);
-  background: rgba(155, 134, 255, 0.08);
-  box-shadow: 0 0 24px rgba(155, 134, 255, 0.12);
-  animation: glow 3.2s ease-in-out infinite;
-}
-.arch svg { width: 18px; height: 18px; fill: none; stroke: var(--violet); stroke-width: 1.6; }
-
-.cta {
-  position: relative;
-  overflow: hidden;
-  margin: 18px 0 4px;
-  padding: 28px 24px 20px;
-  text-align: center;
-  border-radius: 22px;
-  background:
-    radial-gradient(500px 160px at 12% 80%, rgba(46, 231, 255, 0.14), transparent 70%),
-    radial-gradient(420px 180px at 92% 70%, rgba(155, 134, 255, 0.16), transparent 70%),
-    var(--card);
-  border: 1px solid rgba(46, 231, 255, 0.28);
-  box-shadow: inset 0 0 40px rgba(46, 231, 255, 0.04);
-}
-.cta h2 { margin-bottom: 8px; }
-.cta > p { margin: 0; color: #c5d4e8; }
-.waves { position: absolute; left: 0; right: 0; bottom: 0; width: 140%; height: 120px; pointer-events: none; }
-.waves path {
-  fill: none; stroke: rgba(120, 210, 255, 0.28); stroke-width: 1.4;
-  animation: drift 9s linear infinite;
-}
-.waves path:last-child { stroke: rgba(155, 134, 255, 0.35); animation-duration: 13s; }
-.go {
-  position: relative;
-  display: inline-flex; align-items: center; gap: 8px;
-  margin: 22px 0 16px; padding: 12px 22px; border-radius: 12px;
-  background: var(--cyan); color: #042028; font-weight: 750;
-  box-shadow: 0 10px 28px rgba(46, 231, 255, 0.28);
+.own input:focus { outline: none; border-bottom-color: var(--cyan); }
+.try {
+  display: inline-flex; align-items: center; margin-top: 0; padding: 14px 28px;
+  border-radius: 999px; background: var(--cyan); color: #042028; font-weight: 750;
+  box-shadow: 0 12px 32px rgba(46, 231, 255, 0.28);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
-.go span { transition: transform 0.2s ease; }
-.go:hover { transform: translateY(-2px); box-shadow: 0 14px 34px rgba(46, 231, 255, 0.4); }
-.go:hover span { transform: translateX(4px); }
-.notice { color: #8ea3bd; font-size: 0.86rem; }
+.try:hover { transform: translateY(-2px); box-shadow: 0 16px 36px rgba(46, 231, 255, 0.4); }
+.notice { margin: 36px 0 0; color: #8ea3bd; font-size: 0.86rem; }
+.sign-key {
+  position: absolute; right: 28px; bottom: 22px; z-index: 3;
+  display: flex; gap: 14px; margin: 0; color: #d5e4f6; font-size: 0.82rem;
+}
+.sign-key span { display: inline-flex; align-items: center; gap: 7px; }
+.sign-key i {
+  width: 22px; height: 3px; border-radius: 99px; background: #3d8bff;
+  box-shadow: 0 0 8px #3d8bff;
+}
+.sign-key .neg { background: #ff8a30; box-shadow: 0 0 8px #ff8a30; }
 
 .build {
   position: relative;
@@ -244,13 +188,6 @@ footer { text-align: center; color: #7f93ad; padding: 22px 16px 28px; }
   from { opacity: 0; transform: translateY(18px); }
   to { opacity: 1; transform: none; }
 }
-@keyframes drift {
-  from { transform: translateX(0); }
-  to { transform: translateX(-12%); }
-}
-@keyframes glow {
-  50% { box-shadow: 0 0 28px rgba(155, 134, 255, 0.28); }
-}
 @keyframes orb {
   50% { transform: translate3d(36px, -28px, 0) scale(1.12); }
 }
@@ -260,8 +197,8 @@ footer { text-align: center; color: #7f93ad; padding: 22px 16px 28px; }
 
 @media (max-width: 860px) {
   .top, main { width: min(1120px, calc(100% - 28px)); }
-  .hero, .flow { grid-template-columns: 1fr; }
-  .chevron { transform: rotate(90deg); justify-self: center; }
+  .hero { grid-template-columns: 1fr; }
+  .sign-key { right: 12px; bottom: 8px; }
   .brand-meta { display: none; }
   .brand strong, .top-nav a { white-space: nowrap; }
   .top-nav { gap: 12px; font-size: 0.88rem; }

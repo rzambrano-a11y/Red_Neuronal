@@ -228,6 +228,7 @@ class ConnectionRiskService:
         probability = float(
             np.asarray(self._model.predict(scaled_features, verbose=0)).reshape(-1)[0]
         )
+        trace = self._forward_trace(scaled_features, probability)
         label = int(probability >= self._threshold)
         classification = "sospechosa" if label else "normal"
         relation = "igual o superior" if label else "inferior"
@@ -244,7 +245,54 @@ class ConnectionRiskService:
             classification=classification,
             explanation=explanation,
             academic_notice=ACADEMIC_NOTICE,
+            trace=trace,
         )
+
+    def _forward_trace(self, scaled_features: np.ndarray, probability: float) -> dict[str, Any]:
+        """Activaciones reales de cada capa para la misma entrada ya escalada."""
+
+        assert self._model is not None
+        current = np.asarray(scaled_features, dtype=np.float32)
+        layers: list[dict[str, Any]] = []
+        for layer in self._model.layers:
+            if not isinstance(layer, keras.layers.Dense):
+                continue
+            kernel, bias = layer.get_weights()
+            pre = current @ kernel + bias
+            name = layer.activation.__name__
+            if name == "relu":
+                activated = np.maximum(pre, 0)
+            elif name == "sigmoid":
+                activated = 1.0 / (1.0 + np.exp(-np.clip(pre, -60, 60)))
+            else:
+                activated = np.asarray(layer(current), dtype=np.float32)
+            layers.append(
+                {
+                    "name": layer.name,
+                    "activation": name,
+                    "values": [round(float(value), 4) for value in np.asarray(activated).reshape(-1)],
+                }
+            )
+            current = np.asarray(activated, dtype=np.float32)
+        if layers and layers[-1]["activation"] == "sigmoid":
+            layers[-1]["values"] = [round(float(probability), 4)]
+        return {
+            "scaled": [round(float(value), 4) for value in np.asarray(scaled_features).reshape(-1)],
+            "layers": layers,
+        }
+
+    def connection_weights(self) -> list[list[list[float]]]:
+        """Pesos reales de cada conexión, en el mismo orden que las capas 2-8-4-1."""
+
+        self._require_ready()
+        assert self._model is not None
+        matrices: list[list[list[float]]] = []
+        for layer in self._model.layers:
+            if not isinstance(layer, keras.layers.Dense):
+                continue
+            kernel = np.asarray(layer.get_weights()[0], dtype=np.float64)
+            matrices.append([[round(float(value), 4) for value in row] for row in kernel])
+        return matrices
 
     def predict_many(
         self, connections: Sequence[tuple[Any, Any]]

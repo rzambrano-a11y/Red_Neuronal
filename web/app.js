@@ -9,6 +9,7 @@ const scene = {
   particles: [],
   width: 0,
   height: 0,
+  replay: null,
 };
 
 const canvas = document.querySelector("#net");
@@ -62,6 +63,7 @@ function layoutNetwork() {
         scene.edges.push({
           from,
           to,
+          weight: null,
           c1: { x: mid, y: from.y + lift },
           c2: { x: mid, y: to.y - lift * 0.4 },
         });
@@ -79,6 +81,23 @@ function layoutNetwork() {
       if (particle.edge >= scene.edges.length) particle.edge = 0;
     });
   }
+  stampWeights();
+}
+
+let weightMatrices = null;
+
+function stampWeights() {
+  if (!weightMatrices) return;
+  scene.edges.forEach((edge) => {
+    const matrix = weightMatrices[edge.from.layer];
+    if (matrix && matrix[edge.from.index]) edge.weight = matrix[edge.from.index][edge.to.index];
+  });
+}
+
+function signedColor(weight, alpha) {
+  if (typeof weight !== "number") return `rgba(158, 186, 214, ${alpha * 0.45})`;
+  const [red, green, blue] = weight >= 0 ? [61, 139, 255] : [255, 138, 48];
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
 }
 
 function pointOnEdge(edge, t) {
@@ -90,7 +109,61 @@ function pointOnEdge(edge, t) {
   };
 }
 
+const PASS_BEATS = [1400, 1200, 1800, 1700, 1600, 1500];
+
+function easeOut(value) {
+  return 1 - (1 - Math.min(1, Math.max(0, value))) ** 3;
+}
+
+function formatNumber(value, digits = 2) {
+  return Number(value).toLocaleString("es-CO", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
+}
+
+function replayClock(now) {
+  const replay = scene.replay;
+  if (!replay) return null;
+  if (replay.settled) return { index: 5, local: 1, finished: true };
+  const elapsed = (now - replay.started) * scene.speed;
+  let cursor = 0;
+  const total = PASS_BEATS.reduce((sum, beat) => sum + beat, 0);
+  for (let index = 0; index < PASS_BEATS.length; index += 1) {
+    if (elapsed < cursor + PASS_BEATS[index]) {
+      return { index, local: (elapsed - cursor) / PASS_BEATS[index], finished: false, progress: elapsed / total };
+    }
+    cursor += PASS_BEATS[index];
+  }
+  return { index: 5, local: 1, finished: true, progress: 1 };
+}
+
+function layerValues(node) {
+  const replay = scene.replay;
+  if (!replay?.trace) return null;
+  if (node.layer === 0) {
+    return [replay.payload.failed_attempts / 20, replay.payload.traffic_mb / 2000];
+  }
+  return replay.trace.layers?.[node.layer - 1]?.values || null;
+}
+
+function layerOpen(layer, phase) {
+  return phase >= [0, 2, 3, 4][layer];
+}
+
 function activation(node) {
+  const clock = scene.replay?.clock;
+  if (scene.replay && clock) {
+    if (!scene.replay.settled && !layerOpen(node.layer, clock.index)) return 0.04;
+    const values = layerValues(node);
+    if (!values) return 0.2;
+    const raw = Math.abs(values[node.index] || 0);
+    const peak = Math.max(1, ...values.map((value) => Math.abs(value)));
+    const level = Math.min(1, raw / peak);
+    const opens = [0, 2, 3, 4][node.layer];
+    if (!scene.replay.settled && clock.index === opens) return 0.05 + level * easeOut(clock.local);
+    return 0.1 + level * 0.9;
+  }
   if (node.layer === 0) {
     return node.index === 0 ? scene.attempts / 20 : scene.traffic / 2000;
   }
@@ -119,64 +192,145 @@ function drawAtmosphere(now) {
   }
 }
 
+function shownProbability() {
+  const clock = scene.replay?.clock;
+  if (scene.replay && !scene.replay.settled && clock && clock.index < 4) return null;
+  return scene.replay?.payload?.probability ?? scene.probability;
+}
+
+function drawBeam(phase) {
+  const focus = [0, 0, 1, 2, 3, 3][phase];
+  const x = scene.nodes[focus]?.[0]?.x;
+  if (x == null) return;
+  const beam = ctx.createLinearGradient(x - 36, 0, x + 36, 0);
+  beam.addColorStop(0, "rgba(46, 231, 255, 0)");
+  beam.addColorStop(0.5, "rgba(46, 231, 255, 0.16)");
+  beam.addColorStop(1, "rgba(46, 231, 255, 0)");
+  ctx.fillStyle = beam;
+  ctx.fillRect(x - 36, 0, 72, scene.height);
+}
+
+function drawSignalLabels() {
+  const replay = scene.replay;
+  if (!replay?.clock) return;
+  const phase = replay.clock.index;
+  ctx.font = "12px Segoe UI, sans-serif";
+  ctx.textBaseline = "middle";
+  scene.nodes.flat().forEach((node) => {
+    if (!layerOpen(node.layer, phase) && !replay.settled) return;
+    const values = layerValues(node);
+    if (!values) return;
+    let label = "";
+    if (node.layer === 0) {
+      label = node.index === 0 ? `${replay.payload.failed_attempts}` : `${Math.round(replay.payload.traffic_mb)} MB`;
+      ctx.textAlign = "right";
+      ctx.fillStyle = "rgba(231, 242, 255, 0.92)";
+      ctx.fillText(label, node.x - node.r - 8, node.y);
+      return;
+    }
+    const value = values[node.index] || 0;
+    if (node.layer === 3) {
+      label = `${formatNumber(value * 100, 1)} %`;
+      ctx.textAlign = "center";
+      ctx.fillStyle = value >= (replay.payload.threshold || 0.5) ? "#f5b942" : "#3ee0a0";
+      ctx.fillText(label, node.x, node.y - node.r - 14);
+      return;
+    }
+    if (value <= 0.01) return;
+    label = formatNumber(value, 2);
+    ctx.textAlign = "left";
+    ctx.fillStyle = "rgba(231, 242, 255, 0.8)";
+    ctx.fillText(label, node.x + node.r + 6, node.y);
+  });
+}
+
 function drawNetwork(now) {
   const { width, height } = scene;
   ctx.clearRect(0, 0, width, height);
   drawAtmosphere(now);
-  const wave = Math.sin(now / 1400);
+  const live = scene.replay && !scene.replay.settled && scene.replay.clock;
+  if (live) drawBeam(scene.replay.clock.index);
+  const wave = live ? 0 : Math.sin(now / 1400);
+  const hop = live ? [null, null, 0, 1, 2, 2][scene.replay.clock.index] : null;
   scene.edges.forEach((edge) => {
-    const glow = 0.08 + activation(edge.from) * 0.22;
+    const current = hop === edge.from.layer;
+    const open = !live || scene.replay.clock.index >= [2, 3, 4][edge.from.layer];
+    const glow = open ? (current ? 0.9 : 0.42 + activation(edge.from) * 0.4) : 0.16;
+    const strength = Math.min(1, Math.abs(edge.weight || 0));
     ctx.beginPath();
     ctx.moveTo(edge.from.x, edge.from.y);
     ctx.bezierCurveTo(edge.c1.x, edge.c1.y + wave * 4, edge.c2.x, edge.c2.y, edge.to.x, edge.to.y);
-    ctx.strokeStyle = `rgba(120, 210, 255, ${glow})`;
-    ctx.lineWidth = 2.4;
-    ctx.stroke();
-    ctx.strokeStyle = `rgba(210, 245, 255, ${glow + 0.12})`;
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = signedColor(edge.weight, glow);
+    ctx.lineWidth = (current ? 2.6 : 1.5) + strength;
     ctx.stroke();
   });
+  const probability = shownProbability();
   scene.particles.forEach((particle) => {
     const edge = scene.edges[particle.edge];
     if (!edge) return;
+    if (live && hop !== edge.from.layer && hop !== null) return;
+    if (live && hop === null) return;
     const point = pointOnEdge(edge, particle.t % 1);
     ctx.beginPath();
-    ctx.fillStyle = scene.probability != null && scene.probability >= 0.5 ? "#f5b942" : "#bff8ff";
-    ctx.arc(point.x, point.y, 2.1, 0, Math.PI * 2);
+    ctx.fillStyle = edge.weight < 0 ? "#ffb27a" : "#8eb8ff";
+    ctx.arc(point.x, point.y, live ? 3 : 2.1, 0, Math.PI * 2);
     ctx.fill();
   });
+  if (live && hop === null) {
+    scene.nodes[0].forEach((node, index) => {
+      const travel = (now / 700 + index * 0.35) % 1;
+      ctx.beginPath();
+      ctx.fillStyle = "#bff8ff";
+      ctx.arc(node.x - 70 * (1 - travel), node.y, 2.4, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  }
   scene.nodes.flat().forEach((node) => {
     const level = activation(node);
-    const color = node.layer === 3 && scene.probability != null
-      ? (scene.probability >= 0.5 ? "#f5b942" : "#3ee0a0")
+    const color = node.layer === 3 && probability != null
+      ? (probability >= 0.5 ? "#f5b942" : "#3ee0a0")
       : (node.layer === 1 ? "#9d8cff" : "#7eecff");
     ctx.beginPath();
     ctx.fillStyle = color;
-    ctx.globalAlpha = 0.18 + level * 0.25;
-    ctx.arc(node.x, node.y, node.r + 7 + level * 4, 0, Math.PI * 2);
+    ctx.globalAlpha = 0.16 + level * 0.34;
+    ctx.arc(node.x, node.y, node.r + 7 + level * 6, 0, Math.PI * 2);
     ctx.fill();
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha = live && !layerOpen(node.layer, scene.replay.clock.index) ? 0.28 : 1;
     ctx.beginPath();
     ctx.fillStyle = color;
     ctx.arc(node.x, node.y, node.r, 0, Math.PI * 2);
     ctx.fill();
+    ctx.globalAlpha = 1;
     ctx.beginPath();
     ctx.strokeStyle = "rgba(255,255,255,0.8)";
     ctx.lineWidth = 1.2;
     ctx.arc(node.x, node.y, node.r * 0.45, 0, Math.PI * 2);
     ctx.stroke();
   });
+  if (scene.replay) drawSignalLabels();
 }
 
 function frame(now) {
   const elapsed = now - lastFrame;
   lastFrame = now;
-  if (scene.playing && scene.edges.length) {
-    scene.particles.forEach((particle) => {
-      particle.t += particle.speed * scene.speed * elapsed;
+  if (scene.replay && !scene.replay.settled) {
+    scene.replay.clock = replayClock(now);
+    paintPass(scene.replay.clock);
+    if (scene.replay.clock.finished) settleReplay();
+  }
+  const live = scene.replay && !scene.replay.settled && scene.replay.clock;
+  const hop = live ? [null, null, 0, 1, 2, 2][scene.replay.clock.index] : null;
+  if ((scene.playing || live) && scene.edges.length) {
+    const hopEdges = hop == null ? [] : scene.edges.reduce((indexes, edge, index) => {
+      if (edge.from.layer === hop) indexes.push(index);
+      return indexes;
+    }, []);
+    scene.particles.forEach((particle, index) => {
+      if (live && hopEdges.length) particle.edge = hopEdges[index % hopEdges.length];
+      particle.t += particle.speed * scene.speed * elapsed * (live ? 2.4 : 1);
       if (particle.t > 1) {
         particle.t %= 1;
-        particle.edge = Math.floor(Math.random() * scene.edges.length);
+        if (!live) particle.edge = Math.floor(Math.random() * scene.edges.length);
       }
     });
   }
@@ -192,6 +346,7 @@ function showView(name) {
     button.classList.toggle("is-on", button.dataset.view === name);
   });
   if (name === "analizar") requestAnimationFrame(resize);
+  if (name !== "guia") stopTutorial();
 }
 
 function setStep(step) {
@@ -251,7 +406,7 @@ function applyState(state) {
     button.querySelector("span").textContent = "Entrenar de nuevo";
     warn.hidden = true;
     progress.hidden = true;
-    chip.textContent = "Modelo activo";
+    if (!scene.replay) chip.textContent = "Modelo activo";
   } else {
     title.textContent = "Sin modelo";
     detail.textContent = "Entrénela para clasificar conexiones.";
@@ -266,6 +421,19 @@ function applyState(state) {
   error.hidden = !state.error || state.training;
   error.textContent = state.error || "";
   modelReady = Boolean(state.ready && !state.training);
+  if (state.weights) {
+    weightMatrices = state.weights;
+    stampWeights();
+  }
+  if (pendingCustom && state.ready && !state.training) {
+    const custom = pendingCustom;
+    pendingCustom = null;
+    attempts.value = custom.attempts;
+    traffic.value = custom.traffic;
+    syncInputs();
+    setStep("2");
+    predict(custom.attempts, custom.traffic);
+  }
   if (state.revision !== seenRevision) {
     renderResults(state.report);
     const previous = seenRevision;
@@ -277,7 +445,7 @@ function applyState(state) {
   }
   if (!bootstrapped && !state.loading) {
     bootstrapped = true;
-    if (state.ready) setStep("2");
+    if (!location.hash && state.ready) setStep("2");
   }
   if (state.training && !polling) {
     polling = true;
@@ -416,14 +584,57 @@ document.querySelector("#panel-train").addEventListener("submit", async (event) 
 
 const attempts = document.querySelector("#attempts");
 const traffic = document.querySelector("#traffic");
+const attemptsNum = document.querySelector("#attempts-num");
+const trafficNum = document.querySelector("#traffic-num");
+
+function clampAttempts(value) {
+  const number = Math.round(Number(value));
+  if (!Number.isFinite(number)) return 0;
+  return Math.min(20, Math.max(0, number));
+}
+
+function clampTraffic(value) {
+  const number = Math.round(Number(value));
+  if (!Number.isFinite(number)) return 0;
+  return Math.min(2000, Math.max(0, number));
+}
+
 function syncInputs() {
   scene.attempts = Number(attempts.value);
   scene.traffic = Number(traffic.value);
-  document.querySelector("#attempts-out").textContent = attempts.value;
-  document.querySelector("#traffic-out").textContent = `${traffic.value} MB`;
+  if (document.activeElement !== attemptsNum) attemptsNum.value = attempts.value;
+  if (document.activeElement !== trafficNum) trafficNum.value = traffic.value;
 }
+
+function bindTyped(typed, slider, clamp) {
+  typed.addEventListener("input", () => {
+    if (typed.value === "") return;
+    slider.value = clamp(typed.value);
+    syncInputs();
+  });
+  typed.addEventListener("change", () => {
+    const next = clamp(typed.value);
+    typed.value = next;
+    slider.value = next;
+    syncInputs();
+  });
+}
+
 attempts.addEventListener("input", syncInputs);
 traffic.addEventListener("input", syncInputs);
+bindTyped(attemptsNum, attempts, clampAttempts);
+bindTyped(trafficNum, traffic, clampTraffic);
+
+function customFromQuery() {
+  const params = new URLSearchParams(location.search);
+  if (!params.has("intentos") && !params.has("trafico")) return null;
+  return {
+    attempts: clampAttempts(params.get("intentos") ?? attempts.value),
+    traffic: clampTraffic(params.get("trafico") ?? traffic.value),
+  };
+}
+
+let pendingCustom = customFromQuery();
 
 document.querySelector("#panel-analyze").addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -438,9 +649,142 @@ document.querySelectorAll(".examples button").forEach((button) => {
   });
 });
 
+function setAnalyzeBusy(busy) {
+  const button = document.querySelector("#panel-analyze .go");
+  button.disabled = busy;
+  button.textContent = busy ? "Recorriendo la red…" : "Analizar la conexión";
+  document.querySelectorAll(".examples button").forEach((item) => { item.disabled = busy; });
+}
+
+function litCount(values) {
+  return (values || []).filter((value) => value > 0.01).length;
+}
+
+function beatCopy(replay, index) {
+  const payload = replay.payload;
+  const scaled = replay.trace?.scaled;
+  const hidden = replay.trace?.layers || [];
+  const percent = formatNumber(payload.probability * 100, 1);
+  const threshold = formatNumber(payload.threshold * 100, 0);
+  const beats = [
+    {
+      kicker: "01 · Entrada",
+      title: "Entran los dos números",
+      text: `${payload.failed_attempts} intentos fallidos y ${Math.round(payload.traffic_mb)} MB entran juntos a la red.`,
+    },
+    {
+      kicker: "02 · Normalizar",
+      title: "Se ponen en la misma escala",
+      text: scaled
+        ? `El escalador del entrenamiento los deja en ${formatNumber(scaled[0])} y ${formatNumber(scaled[1])}. Así el tráfico no se impone solo por ser un número más grande.`
+        : "El escalador del entrenamiento pone los dos números en la misma escala.",
+    },
+    {
+      kicker: "03 · ReLU",
+      title: "Ocho neuronas buscan el patrón",
+      text: hidden[0]
+        ? `Cada neurona suma pesos por entradas más el sesgo. ReLU apaga lo negativo: ${litCount(hidden[0].values)} de 8 siguen encendidas.`
+        : "La señal cruza la primera capa oculta y ReLU deja pasar lo positivo.",
+    },
+    {
+      kicker: "04 · ReLU",
+      title: "Cuatro neuronas afinan la señal",
+      text: hidden[1]
+        ? `Esas ocho salidas se mezclan aquí. ${litCount(hidden[1].values)} de 4 quedan con activación.`
+        : "La segunda capa mezcla lo que la primera dejó pasar.",
+    },
+    {
+      kicker: "05 · Sigmoide",
+      title: "Sale una probabilidad",
+      text: `La última cuenta pasa por la sigmoide y se convierte en ${percent} %.`,
+    },
+    {
+      kicker: "06 · Umbral",
+      title: payload.label ? "Queda como sospechosa" : "Queda como normal",
+      text: `${percent} % ${payload.label ? "llega al" : "queda por debajo del"} umbral del ${threshold} %.`,
+    },
+  ];
+  return beats[index];
+}
+
+function paintPass(clock) {
+  const replay = scene.replay;
+  if (!replay || replay.painted === clock.index) return;
+  replay.painted = clock.index;
+  const beat = beatCopy(replay, clock.index);
+  document.querySelector("#pass").hidden = false;
+  document.querySelector("#film-corners").hidden = false;
+  document.querySelector("#pass-kicker").textContent = beat.kicker;
+  document.querySelector("#pass-title").textContent = beat.title;
+  document.querySelector("#pass-text").textContent = beat.text;
+  document.querySelectorAll("#pass-beats li").forEach((item, index) => {
+    item.classList.toggle("is-on", index === clock.index);
+    item.classList.toggle("is-done", index < clock.index);
+  });
+}
+
+function fillResult(payload) {
+  scene.probability = payload.probability;
+  const card = document.querySelector("#result");
+  card.hidden = false;
+  card.classList.remove("is-reveal");
+  void card.offsetWidth;
+  card.classList.add("is-reveal");
+  card.classList.toggle("is-suspicious", payload.label === 1);
+  document.querySelector("#result-class").textContent = payload.label ? "Sospechosa" : "Normal";
+  document.querySelector("#result-prob").textContent = `${formatNumber(payload.probability * 100, 1)}%`;
+  document.querySelector("#result-fill").style.width = `${payload.probability * 100}%`;
+  document.querySelector("#result-mark").style.left = `${payload.threshold * 100}%`;
+  document.querySelector("#result-threshold").textContent = `Umbral utilizado: ${formatNumber(payload.threshold * 100, 0)}%.`;
+  document.querySelector("#result-values").textContent = `Valores introducidos: ${payload.failed_attempts} intentos · ${Math.round(payload.traffic_mb)} MB.`;
+  document.querySelector("#result-explain").textContent = `Explicación: ${payload.explanation}`;
+}
+
+function settleReplay() {
+  const replay = scene.replay;
+  if (!replay || replay.settled) return;
+  replay.settled = true;
+  replay.clock = { index: 5, local: 1, finished: true };
+  paintPass(replay.clock);
+  fillResult(replay.payload);
+  setAnalyzeBusy(false);
+  document.querySelector("#stage-chip").textContent = "Clasificación lista";
+  clearTimeout(settleReplay.timer);
+  settleReplay.timer = setTimeout(() => {
+    if (scene.replay === replay) {
+      document.querySelector("#pass").hidden = true;
+      document.querySelector("#film-corners").hidden = true;
+    }
+  }, 2200);
+}
+
+function startReplay(payload) {
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  scene.replay = {
+    payload,
+    trace: payload.trace || null,
+    started: performance.now(),
+    painted: -1,
+    settled: false,
+    clock: { index: 0, local: 0, finished: false },
+  };
+  document.querySelector("#result").hidden = true;
+  document.querySelector("#stage-chip").textContent = "Recorrido en vivo";
+  if (reduced) {
+    scene.replay.settled = true;
+    scene.replay.clock = { index: 5, local: 1, finished: true };
+    fillResult(payload);
+    setAnalyzeBusy(false);
+    document.querySelector("#stage-chip").textContent = "Clasificación lista";
+    return;
+  }
+  paintPass(scene.replay.clock);
+}
+
 async function predict(failedAttempts, trafficMb) {
   const error = document.querySelector("#predict-error");
   error.hidden = true;
+  setAnalyzeBusy(true);
   const response = await fetch("/api/predict", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -450,19 +794,10 @@ async function predict(failedAttempts, trafficMb) {
   if (!response.ok) {
     error.hidden = false;
     error.textContent = payload.error;
+    setAnalyzeBusy(false);
     return;
   }
-  scene.probability = payload.probability;
-  const card = document.querySelector("#result");
-  card.hidden = false;
-  card.classList.toggle("is-suspicious", payload.label === 1);
-  document.querySelector("#result-class").textContent = payload.label ? "Sospechosa" : "Normal";
-  document.querySelector("#result-prob").textContent = `${(payload.probability * 100).toFixed(1)}%`;
-  document.querySelector("#result-fill").style.width = `${payload.probability * 100}%`;
-  document.querySelector("#result-mark").style.left = `${payload.threshold * 100}%`;
-  document.querySelector("#result-threshold").textContent = `Umbral utilizado: ${(payload.threshold * 100).toFixed(0)}%.`;
-  document.querySelector("#result-values").textContent = `Valores introducidos: ${payload.failed_attempts} intentos · ${Math.round(payload.traffic_mb)} MB.`;
-  document.querySelector("#result-explain").textContent = `Explicación: ${payload.explanation}`;
+  startReplay(payload);
 }
 
 canvas.addEventListener("mousemove", (event) => {
@@ -472,7 +807,9 @@ canvas.addEventListener("mousemove", (event) => {
   const node = scene.nodes.flat().find((item) => Math.hypot(item.x - x, item.y - y) < item.r + 8);
   tooltip.hidden = !node;
   if (!node) return;
-  tooltip.textContent = `${node.name} · neurona ${node.index + 1}`;
+  const values = layerValues(node);
+  const extra = values ? ` · ${formatNumber(values[node.index], 2)}` : "";
+  tooltip.textContent = `${node.name} · neurona ${node.index + 1}${extra}`;
   tooltip.style.left = `${node.x + 12}px`;
   tooltip.style.top = `${node.y - 10}px`;
 });
@@ -490,3 +827,162 @@ function openFromHash() {
 }
 openFromHash();
 window.addEventListener("hashchange", openFromHash);
+
+const tutorialSteps = [
+  {
+    title: "Qué hace esta red",
+    html: "<p>Clasifica una conexión <strong>simulada</strong> como normal, la clase 0, o sospechosa, la clase 1. El número de la pantalla lo calcula el modelo entrenado.</p>",
+    speech: "Este tutorial recorre el experimento completo. La red tiene una sola tarea: mirar una conexión simulada y decir si se parece más a una conexión normal o a una sospechosa. Normal es la clase cero. Sospechosa es la clase uno. El número que ves no lo inventa la interfaz. Lo calcula el modelo después de entrenar.",
+  },
+  {
+    title: "Las dos entradas",
+    html: "<p><strong>x₁</strong> son los intentos fallidos de inicio de sesión, un entero de 0 a 20. <strong>x₂</strong> es el tráfico enviado, de 0 a 2.000 MB. La semilla 42 no es una entrada: solo permite repetir los mismos datos.</p>",
+    speech: "Cada conexión entra con dos números, y solo con dos. Equís uno son los intentos fallidos de inicio de sesión, un entero entre cero y veinte. Equís dos es el tráfico enviado, entre cero y dos mil megabytes. La red no ve direcciones, puertos ni usuarios. La semilla cuarenta y dos no clasifica nada: si repites el experimento, vuelven a salir los mismos datos.",
+  },
+  {
+    title: "De dónde sale la etiqueta",
+    html: "<p>La etiqueta es la respuesta con la que la red aprende. No sale de un ataque real. El ruido evita que la frontera sea perfecta.</p><pre>puntaje = 0,55 × (intentos / 20) + 0,45 × (tráfico / 2000) + ruido\netiqueta = 1 si puntaje ≥ 0,55; si no, 0</pre>",
+    speech: "La etiqueta es la respuesta correcta. No sale de un ataque real. Se calcula así: cero coma cincuenta y cinco por los intentos divididos entre veinte, más cero coma cuarenta y cinco por el tráfico dividido entre dos mil, más un poco de ruido. Si el puntaje llega a cero coma cincuenta y cinco, la etiqueta es uno, sospechosa. Si no, es cero, normal. El ruido existe para que la frontera no sea perfecta y la red tenga algo que aprender.",
+  },
+  {
+    title: "La cuenta de una neurona",
+    html: "<p>Antes de la cuenta, los datos se normalizan. Si no, el tráfico, que llega a 2.000, dominaría a los intentos, que solo llegan a 20. El escalador se ajusta solo con el entrenamiento.</p><pre>z = (w₁ × x₁) + (w₂ × x₂) + b</pre><p>El peso dice cuánto importa cada entrada. El sesgo desplaza la respuesta. Esos valores no vienen escritos a mano: el entrenamiento los ajusta.</p>",
+    speech: "Antes de entrar, los dos números se normalizan. Si no se hiciera, el tráfico, que llega hasta dos mil, aplastaría a los intentos, que solo llegan a veinte. El normalizador se ajusta únicamente con el entrenamiento. Dentro de la neurona, zeta es el peso uno por equís uno, más el peso dos por equís dos, más el sesgo. El peso dice cuánto importa esa entrada. El sesgo desplaza la respuesta, incluso cuando las entradas son pequeñas. La red no trae esos números escritos: los ajusta al entrenar.",
+  },
+  {
+    title: "ReLU, sigmoide y el umbral",
+    html: "<pre>ReLU(z) = 0 si z &lt; 0;  z si z ≥ 0\np = 1 / (1 + e^(−z))</pre><p>ReLU, en las capas ocultas, apaga lo negativo y deja pasar lo positivo. Así aparecen relaciones que una recta no separa. La sigmoide de la salida convierte la cuenta en una probabilidad entre 0 y 1. Si llega a <strong>0,5</strong>, la clase es sospechosa.</p>",
+    speech: "Las capas ocultas usan ReLU. Si zeta es negativo, ReLU lo convierte en cero. Si es positivo, lo deja pasar. Por eso la red puede separar patrones que una sola recta no separa. La salida usa la sigmoide: uno dividido entre uno más e elevado a menos zeta. El resultado es una probabilidad entre cero y uno. La probabilidad todavía no es la clase. El umbral del taller es cero coma cinco. Si la probabilidad llega a ese valor, la conexión se clasifica como sospechosa. Si queda por debajo, como normal.",
+  },
+  {
+    title: "La arquitectura y los 65 parámetros",
+    html: "<p>La red es <strong>2-8-4-1</strong>: 2 entradas, 8 neuronas ReLU, 4 neuronas ReLU y 1 salida sigmoide.</p><pre>entrada → oculta:  2 × 8 + 8 = 24\noculta → oculta:   8 × 4 + 4 = 36\noculta → salida:   4 × 1 + 1 =  5\ntotal                        65</pre>",
+    speech: "La arquitectura es dos, ocho, cuatro, uno. Dos entradas, ocho neuronas ReLU, cuatro neuronas ReLU y una salida sigmoide. Hay sesenta y cinco parámetros entrenables. Se cuentan así. De la entrada a la primera capa oculta: dos por ocho pesos, más ocho sesgos, son veinticuatro. De esa capa a la siguiente: ocho por cuatro pesos, más cuatro sesgos, son treinta y seis. Y de la última capa oculta a la salida: cuatro pesos más un sesgo, son cinco. Veinticuatro más treinta y seis más cinco son sesenta y cinco.",
+  },
+  {
+    title: "Dónde aprende",
+    html: "<p>El aprendizaje ocurre en <code>modelo.fit()</code>: propagación hacia adelante, comparación con la etiqueta, pérdida y corrección de pesos y sesgos. El optimizador es Adam y la pérdida es la entropía cruzada binaria.</p><p>De las 2.000 conexiones, el <strong>64 %</strong> ajusta, el <strong>16 %</strong> vigila la validación y el <strong>20 %</strong> queda intacto para la prueba. Si la validación no mejora durante 12 épocas, el ajuste se detiene y se restauran los pesos de la mejor época.</p>",
+    speech: "El aprendizaje ocurre en modelo punto fit. En cada época la red hace la propagación hacia adelante, compara su predicción con la etiqueta, calcula la pérdida y corrige pesos y sesgos hacia atrás. El optimizador es Adam y la pérdida es la entropía cruzada binaria. De las dos mil conexiones, el sesenta y cuatro por ciento ajusta los pesos, el dieciséis por ciento vigila la validación y el veinte por ciento queda intacto para el examen final. Si la pérdida de validación no mejora durante doce épocas, el entrenamiento se detiene y se restauran los pesos de la mejor época, no los de la última.",
+  },
+  {
+    title: "Cómo leer el resultado",
+    html: "<p>La exactitud es el porcentaje de aciertos. La precisión dice, de las marcadas como sospechosas, cuántas lo eran. El recall dice, de las sospechosas reales, cuántas detectó. Se comparan con una referencia que siempre predice la clase más frecuente.</p><p>Cada análisis llama a <code>ConnectionRiskService.predict</code>. El servicio valida el rango, normaliza con el escalador del entrenamiento y devuelve la probabilidad, el umbral, la clase y la explicación.</p><p>Una exactitud alta reconoce el patrón simulado. No detecta ataques reales. Demostración académica con datos simulados. Este resultado no confirma ni descarta un ataque informático real.</p>",
+    speech: "En la prueba se leen la pérdida, la exactitud, la precisión y el recall. La exactitud es el porcentaje de aciertos. La precisión dice, de las que marcó como sospechosas, cuántas lo eran. El recall dice, de las sospechosas reales, cuántas detectó. Esas cifras se comparan con una referencia que siempre predice la clase más frecuente. La pantalla no recalcula el número por su cuenta: llama a Connection Risk Service punto predict. El servicio valida el rango, normaliza con el mismo escalador del entrenamiento y devuelve la probabilidad, el umbral, la clase y la explicación. Una exactitud alta significa que la red reconoció el patrón simulado. No significa que pueda detectar un ataque real. Esta es una demostración académica con datos simulados. El resultado no confirma ni descarta un ataque informático real.",
+  },
+];
+
+const tutorial = { index: 0, playing: false, timer: 0, token: 0 };
+
+function stopTutorial() {
+  tutorial.playing = false;
+  tutorial.token += 1;
+  clearInterval(tutorial.timer);
+  if (window.speechSynthesis) speechSynthesis.cancel();
+  const play = document.querySelector("#tutorial-play");
+  if (play && !play.disabled) play.textContent = tutorial.index === 0 ? "Empezar con voz" : "Escuchar este paso";
+}
+
+function maleVoice() {
+  if (!window.speechSynthesis) return null;
+  const voices = speechSynthesis.getVoices();
+  const spanish = voices.filter((voice) => /^es([-_]|$)/i.test(voice.lang) || /spanish|español/i.test(voice.name));
+  const male = /pablo|álvaro|alvaro|raul|raúl|jorge|diego|carlos|enrique|andrés|andres|miguel|juan|mateo|male|hombre/i;
+  const female = /helena|sabina|laura|mónica|monica|paulina|elvira|dalia|female|mujer/i;
+  return spanish.find((voice) => male.test(voice.name) && !female.test(voice.name))
+    || spanish.find((voice) => !female.test(voice.name))
+    || spanish[0]
+    || null;
+}
+
+function voiceLabel() {
+  const node = document.querySelector("#tutorial-voice");
+  if (!window.speechSynthesis) {
+    node.textContent = "Este navegador no ofrece lectura en voz alta. El texto del tutorial sigue disponible.";
+    document.querySelector("#tutorial-play").disabled = true;
+    return;
+  }
+  const voice = maleVoice();
+  const male = voice && /pablo|álvaro|alvaro|raul|raúl|jorge|diego|carlos|enrique|andrés|andres|miguel|juan|mateo|male|hombre/i.test(voice.name);
+  node.textContent = voice
+    ? `Voz: ${voice.name}${male ? ", voz masculina en español." : "."}`
+    : "Todavía no hay una voz en español. El texto se puede leer igual.";
+}
+
+function renderTutorial(index, speakNow) {
+  tutorial.index = index;
+  const step = tutorialSteps[index];
+  document.querySelector("#tutorial-step").textContent = `Paso ${index + 1} de ${tutorialSteps.length}`;
+  document.querySelector("#tutorial-title").textContent = step.title;
+  document.querySelector("#tutorial-body").innerHTML = step.html;
+  document.querySelector("#tutorial-prev").disabled = index === 0;
+  document.querySelector("#tutorial-next").disabled = index === tutorialSteps.length - 1;
+  document.querySelectorAll("#tutorial-index button").forEach((button, buttonIndex) => {
+    button.classList.toggle("is-on", buttonIndex === index);
+  });
+  const play = document.querySelector("#tutorial-play");
+  if (!tutorial.playing) play.textContent = index === 0 ? "Empezar con voz" : "Escuchar este paso";
+  if (speakNow) speakTutorial(step.speech);
+}
+
+function speakTutorial(text) {
+  if (!window.speechSynthesis) return;
+  const token = tutorial.token + 1;
+  tutorial.token = token;
+  speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(text);
+  const voice = maleVoice();
+  utterance.lang = voice?.lang || "es-ES";
+  if (voice) utterance.voice = voice;
+  utterance.rate = 0.96;
+  utterance.onend = () => {
+    if (token !== tutorial.token || !tutorial.playing) return;
+    if (tutorial.index < tutorialSteps.length - 1) renderTutorial(tutorial.index + 1, true);
+    else stopTutorial();
+  };
+  speechSynthesis.speak(utterance);
+  clearInterval(tutorial.timer);
+  tutorial.timer = window.setInterval(() => {
+    if (!speechSynthesis.speaking) {
+      clearInterval(tutorial.timer);
+      return;
+    }
+    speechSynthesis.pause();
+    speechSynthesis.resume();
+  }, 8000);
+}
+
+function startTutorial() {
+  if (!window.speechSynthesis) return;
+  if (tutorial.playing) {
+    stopTutorial();
+    return;
+  }
+  tutorial.playing = true;
+  document.querySelector("#tutorial-play").textContent = "Pausar la voz";
+  const restart = tutorial.index === tutorialSteps.length - 1 && !speechSynthesis.speaking;
+  renderTutorial(restart ? 0 : tutorial.index, true);
+}
+
+function initTutorial() {
+  const list = document.querySelector("#tutorial-index");
+  list.innerHTML = tutorialSteps.map((step, index) => `
+    <li><button type="button" data-step="${index}"><small>Paso ${index + 1}</small>${step.title}</button></li>
+  `).join("");
+  list.querySelectorAll("button").forEach((button) => {
+    button.addEventListener("click", () => renderTutorial(Number(button.dataset.step), tutorial.playing));
+  });
+  document.querySelector("#tutorial-prev").addEventListener("click", () => {
+    if (tutorial.index > 0) renderTutorial(tutorial.index - 1, tutorial.playing);
+  });
+  document.querySelector("#tutorial-next").addEventListener("click", () => {
+    if (tutorial.index < tutorialSteps.length - 1) renderTutorial(tutorial.index + 1, tutorial.playing);
+  });
+  document.querySelector("#tutorial-play").addEventListener("click", startTutorial);
+  if (window.speechSynthesis) {
+    speechSynthesis.onvoiceschanged = voiceLabel;
+    voiceLabel();
+  }
+  renderTutorial(0, false);
+}
+
+initTutorial();
